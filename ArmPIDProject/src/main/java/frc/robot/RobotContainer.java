@@ -5,12 +5,13 @@
 package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
-import frc.robot.commands.Autos;
-import frc.robot.commands.ExampleCommand;
-import frc.robot.subsystems.ExampleSubsystem;
+import frc.robot.subsystems.Arm;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
+import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -20,10 +21,9 @@ import edu.wpi.first.wpilibj2.command.button.Trigger;
  */
 public class RobotContainer {
   // The robot's subsystems and commands are defined here...
-  private final ExampleSubsystem m_exampleSubsystem = new ExampleSubsystem();
-
+  public final Arm m_arm = new Arm();
   // Replace with CommandPS4Controller or CommandJoystick if needed
-  private final CommandXboxController m_driverController =
+  private final CommandXboxController m_controller =
       new CommandXboxController(OperatorConstants.kDriverControllerPort);
 
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
@@ -42,13 +42,19 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
-    // Schedule `ExampleCommand` when `exampleCondition` changes to `true`
-    new Trigger(m_exampleSubsystem::exampleCondition)
-        .onTrue(new ExampleCommand(m_exampleSubsystem));
+    m_controller.y().whileTrue(Commands.run(() -> m_arm.setArmSpeed(.35), m_arm));
+    m_controller.x().whileTrue(Commands.run(() -> m_arm.setArmSpeed(-.25), m_arm));
 
-    // Schedule `exampleMethodCommand` when the Xbox controller's B button is pressed,
-    // cancelling on release.
-    m_driverController.b().whileTrue(m_exampleSubsystem.exampleMethodCommand());
+    m_controller.b().onTrue(new InstantCommand(
+      () -> m_arm.setPID(Shuffleboard.getTab("PID Constants").add("kP", 0).getEntry().getDouble(0),
+        Shuffleboard.getTab("PID Constants").add("kI", 0).getEntry().getDouble(0), 
+        Shuffleboard.getTab("PID Constants").add("kD", 0).getEntry().getDouble(0),
+        Shuffleboard.getTab("PID Constants").add("kS", 0).getEntry().getDouble(0),
+        Shuffleboard.getTab("PID Constants").add("kG", 0).getEntry().getDouble(0),
+        Shuffleboard.getTab("PID Constants").add("kV", 0).getEntry().getDouble(0))));
+
+    m_controller.a().whileTrue(Commands.run(
+      () -> m_arm.usePIDOutput(Shuffleboard.getTab("PID Constants").add("setpoint", 0).getEntry().getDouble(0))));
   }
 
   /**
@@ -56,8 +62,6 @@ public class RobotContainer {
    *
    * @return the command to run in autonomous
    */
-  public Command getAutonomousCommand() {
-    // An example command will be run in autonomous
-    return Autos.exampleAuto(m_exampleSubsystem);
-  }
+  // public Command getAutonomousCommand() {
+  // }
 }
