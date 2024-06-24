@@ -8,51 +8,64 @@ import com.revrobotics.CANSparkLowLevel.MotorType;
 
 import edu.wpi.first.math.controller.ArmFeedforward;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.networktables.GenericEntry;
 import edu.wpi.first.wpilibj.DutyCycleEncoder;
+import edu.wpi.first.wpilibj2.command.ProfiledPIDSubsystem;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
-public class Arm extends SubsystemBase {
+import edu.wpi.first.wpilibj.shuffleboard.*;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+
+public class Arm extends ProfiledPIDSubsystem {
+  
+    DutyCycleEncoder m_revEncoder;
+    ArmFeedforward m_feedforward;
     CANSparkMax m_leftArm;
     CANSparkMax m_rightArm;
-    DutyCycleEncoder m_revEncoder;
-    double setpoint;
-    PIDController m_PIDController;
-    ArmFeedforward m_Feedforward;
-    
 
-    // constructor
+    ShuffleboardTab tab = Shuffleboard.getTab("arm");
+    GenericEntry p = tab.add("kP", 0).getEntry();
+    GenericEntry i = tab.add("kI", 0).getEntry();
+    GenericEntry d = tab.add("kD", 0).getEntry();
+
+    /** Create a new ArmSubsystem. */
     public Arm() {
+        super(
+            new ProfiledPIDController(
+                kP,
+                kI,
+                kD,
+                new TrapezoidProfile.Constraints(
+                    3, 10)),
+                    0
+            );
+        // Start arm at rest in neutral position
+        setGoal(74.5);
+        m_feedforward = new ArmFeedforward(kS, .2, kV);
+        m_revEncoder = new DutyCycleEncoder(0);
         m_leftArm = new CANSparkMax(kArmID, MotorType.kBrushless);
         m_rightArm = new CANSparkMax(kSecondArmID, MotorType.kBrushless);
-        m_leftArm.setInverted(false);
-        m_rightArm.setInverted(true);
-
-        m_PIDController = new PIDController(kP, kI, kD);
-        m_PIDController.setTolerance(kTolerance);
-
-        m_Feedforward = new ArmFeedforward(kS, kG, kV);
-
-        m_revEncoder = new DutyCycleEncoder(kEncoderPort);
-        m_revEncoder.setConnectedFrequencyThreshold(500);
-        m_revEncoder.reset();
-        setpoint = 0;
     }
 
+    @Override
+    public void useOutput(double output, TrapezoidProfile.State setpoint) {
+        // Calculate the feedforward from the sepoint
+        double feedforward = m_feedforward.calculate(setpoint.position, setpoint.velocity);
+        // Add the feedforward to the PID output to get the motor output
+        m_leftArm.setVoltage(output + feedforward);
+    }
+
+    @Override
     public double getMeasurement() {
-        return 75.0 - (m_revEncoder.get() * 360.0);
-    }
-
-    public boolean encoderConnected() {
-        return m_revEncoder.isConnected();
-    }
-
-    public boolean atSetpoint() {
-        return m_PIDController.atSetpoint();
+        return 74.5 - m_revEncoder.get();
     }
 
     public void setArmVoltage(double voltage) {
         m_rightArm.setVoltage(voltage);
         m_leftArm.setVoltage(voltage);
+        SmartDashboard.putNumber("output", voltage);
     }
 
     public void setArmSpeed(double speed) {
@@ -64,23 +77,22 @@ public class Arm extends SubsystemBase {
         m_revEncoder.reset();
     }
 
-    public void setSetPoint(double setpoint) {
-        m_PIDController.setSetpoint(setpoint);
+    public void setPID() {
+        super.m_controller.setP(p.getDouble(0));
+        super.m_controller.setI(i.getDouble(0));
+        super.m_controller.setD(d.getDouble(0));
+        
     }
 
-    public double getSetpoint() {
-        return setpoint;
+    public void resetEncoder() {
+        m_revEncoder.reset();
     }
 
-    public void setPID(double p, double i, double d, double s, double g, double v) {
-        m_PIDController.setP(p);
-        m_PIDController.setI(i);
-        m_PIDController.setD(d);
-        m_Feedforward = new ArmFeedforward(s, g, v);
+    public double getVeloSetpoint() {
+        return super.m_controller.getSetpoint().velocity;
     }
 
-    public void usePIDOutput(double newSetpoint) {
-        setSetPoint(newSetpoint);
-        setArmVoltage(m_PIDController.calculate(getMeasurement()) + m_Feedforward.calculate(setpoint * Math.PI / 180.0, 0));
+    public double getGoal() {
+        return m_controller.getGoal().position;
     }
 }

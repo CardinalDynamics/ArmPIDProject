@@ -42,19 +42,35 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
+    m_arm.setDefaultCommand(
+      Commands.run(() -> m_arm.setArmSpeed(0), m_arm)
+    );
     m_controller.y().whileTrue(Commands.run(() -> m_arm.setArmSpeed(.35), m_arm));
     m_controller.x().whileTrue(Commands.run(() -> m_arm.setArmSpeed(-.25), m_arm));
 
-    m_controller.b().onTrue(new InstantCommand(
-      () -> m_arm.setPID(Shuffleboard.getTab("PID Constants").add("kP", 0).getEntry().getDouble(0),
-        Shuffleboard.getTab("PID Constants").add("kI", 0).getEntry().getDouble(0), 
-        Shuffleboard.getTab("PID Constants").add("kD", 0).getEntry().getDouble(0),
-        Shuffleboard.getTab("PID Constants").add("kS", 0).getEntry().getDouble(0),
-        Shuffleboard.getTab("PID Constants").add("kG", 0).getEntry().getDouble(0),
-        Shuffleboard.getTab("PID Constants").add("kV", 0).getEntry().getDouble(0))));
+  // Move the arm to 2 radians above horizontal when the 'A' button is pressed.
+  m_controller.a().onTrue(
+      Commands.runOnce(() -> {
+            m_arm.setGoal(2);
+            m_arm.enable();
+          }, m_arm));
 
-    m_controller.a().whileTrue(Commands.run(
-      () -> m_arm.usePIDOutput(Shuffleboard.getTab("PID Constants").add("setpoint", 0).getEntry().getDouble(0))));
+  // Move the arm to neutral position when the 'B' button is pressed.
+  m_controller.b().onTrue(
+      Commands.runOnce(() -> {
+            m_arm.setGoal(74.5);
+            m_arm.enable();
+          },
+          m_arm));
+
+    // Disable the arm controller when Y is pressed.
+    m_controller.y().onTrue(Commands.runOnce(m_arm::disable));
+    
+    m_controller.b().onTrue(new InstantCommand(() -> m_arm.setPID(), m_arm));
+
+    m_controller.rightBumper().whileTrue(Commands.run(() -> m_arm.setGoal(m_arm.getGoal() + .01)));
+    m_controller.leftBumper().whileTrue(Commands.run(() -> m_arm.setGoal(m_arm.getGoal() - .01)));
+    m_controller.leftStick().onTrue(new InstantCommand(() -> m_arm.setGoal(0)));
   }
 
   /**
